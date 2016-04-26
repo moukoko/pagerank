@@ -14,6 +14,7 @@ int main(int argc, char *argv[])
 {
   struct graph *g;
   size_t size;
+  const char *outf;
 
   if (argc < 3) {
     print_usage();
@@ -22,12 +23,17 @@ int main(int argc, char *argv[])
   
   size = atol(argv[2]);
 
+  if (argc == 4)
+    outf = argv[3];
+  else
+    outf = NULL;
+
   graph_init(&g, size);
 //  graph_print(NULL, g);
   graph_read_file(argv[1], g);
-  graph_print(NULL, g);
+//  graph_print(NULL, g);
   graph_pagerank(g);
-  graph_print_pagerank(NULL, g);
+  graph_print_pagerank(outf, g);
 
   return 0;
 }

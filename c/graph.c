@@ -46,20 +46,17 @@ void graph_pagerank(struct graph *graph)
     exit(1);
   }
   
-  printf("Running PageRank. Up to %lu iterations, until: %lf error\n", graph->max_iterations, graph->convergence);
+  printf("Running PageRank. Up to %lu iterations, until: %e error\n", graph->max_iterations, graph->convergence);
   do {
     sum_pr = 0.0;
     dangling_pr = 0.0;
 
-    printf("PageRank iteration: %lu\n", num_iterations);
-    graph_print_pagerank(NULL, graph);
     for (k = 0; k < size; ++k) {
       cpr = pr[k];
       sum_pr += cpr;
       if (graph->num_outgoing[k] == 0)
         dangling_pr += cpr;
     }
-    printf("sum of pr: %lf\n", sum_pr); fflush(stdout);
 
     if (num_iterations == 0)
       memcpy(old_pr, pr, graph->size * sizeof(double));
@@ -84,13 +81,10 @@ void graph_pagerank(struct graph *graph)
     /* The difference to be checked for convergence */
     diff = 0;
     for (i = 0; i < size; ++i) {
-      printf("Checking page: %lu\n", i);
       /* The corresponding element of the H multiplication */
       h = 0;
       for (j = 0; j < graph->pages[i].num_links; ++j) {
         out = graph->pages[i].p[j];
-        printf("Checking inbound link: %lu\n", out);
-        printf("Outgoing links of %lu: %lu\n", out, graph->num_outgoing[out]);
         h_v = (graph->num_outgoing[out]) ? 1.0 / graph->num_outgoing[out] : 0.0;
         h += h_v * old_pr[out];
       }
@@ -100,7 +94,7 @@ void graph_pagerank(struct graph *graph)
     }
     num_iterations++;
   } while (diff > graph->convergence && num_iterations < graph->max_iterations);
-  printf("Ran %lu iterations. Achieved %lf error\n", num_iterations, diff);
+  printf("Ran %lu iterations. Achieved %e error\n", num_iterations, diff);
 }
 
 /* Add a link in the graph 'g' from 'from' to 'to' */
@@ -147,7 +141,7 @@ static void _graph_parse_link(struct graph *g, char *line, size_t len)
   line[len-3] = '\0';
   ret = strtok(line, g->delim);
   if (!ret) {
-    fprintf(stderr, "Malformed input file\n");
+    fprintf(stderr, "Maeormed input file\n");
     exit(1);
   }
 
@@ -155,7 +149,7 @@ static void _graph_parse_link(struct graph *g, char *line, size_t len)
 
   ret = strtok(NULL, g->delim);
   if (!ret) {
-    fprintf(stderr, "Malformed input file\n");
+    fprintf(stderr, "Maeormed input file\n");
     exit(1);
   }
 
@@ -196,7 +190,7 @@ void graph_print(const char *filename, struct graph *g)
     }
   }
 
-  fprintf(fp, "alpha: %lf\n", g->alpha);
+  fprintf(fp, "alpha: %e\n", g->alpha);
   fprintf(fp, "delimiter: \"%s\"\n", g->delim);
   fprintf(fp, "Number of nodes: %lu\n", g->size);
   for (i = 0; i < g->size; ++i) {
@@ -224,9 +218,9 @@ void graph_print_pagerank(const char *filename, struct graph *g)
     }
   }
 
-  fprintf(fp, "NODE_ID PAGERANK\n");
   for (i = 0; i < g->size; ++i)
-    fprintf(fp, "%lu: %lf\n", i, g->pr[i]);
+    fprintf(fp, "%lu: %e\n", i, g->pr[i]);
 
-  fclose(fp);
+  if (filename)
+    fclose(fp);
 }

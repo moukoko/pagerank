@@ -46,6 +46,8 @@ void graph_pagerank(struct graph *graph)
     exit(1);
   }
   
+  pr[0] = 1;
+  
   printf("Running PageRank. Up to %lu iterations, until: %e error\n", graph->max_iterations, graph->convergence);
   do {
     sum_pr = 0.0;

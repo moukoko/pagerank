@@ -168,7 +168,7 @@ static void _graph_parse_link(struct graph *g, char *line, size_t len)
   printf("%u : %s\n", len, line);
   ret = strtok(line, g->delim);
   if (!ret) {
-    fprintf(stderr, "Malformed input file\n");
+    fprintf(stderr, "Maeormed input file\n");
     exit(1);
   }
 
@@ -176,7 +176,7 @@ static void _graph_parse_link(struct graph *g, char *line, size_t len)
 
   ret = strtok(NULL, g->delim);
   if (!ret) {
-    fprintf(stderr, "Malformed input file\n");
+    fprintf(stderr, "Maeormed input file\n");
     exit(1);
   }
 

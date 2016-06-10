@@ -29,6 +29,7 @@ struct graph {
 };
 
 void graph_init(struct graph **graph, size_t size);
+void graph_destroy(struct graph *graph);
 void graph_read_file(const char *filename, struct graph *g);
 void graph_pagerank(struct graph *graph);
 void graph_print(const char *filename, struct graph *graph);

@@ -28,9 +28,22 @@ void graph_init(struct graph **graph, size_t size)
   (*graph)->pages = numa_alloc_onnode(size * sizeof(struct links), 0);
   memset((*graph)->pages, 0, sizeof(struct links) * size);
   (*graph)->num_outgoing = numa_alloc_onnode(size * sizeof(size_t), 0);
-  printf("alpha = %.2lf convergence = %.0e max_iterations = %d numeric = 1 delimiter = '%s'\n", 
+  printf("alpha = %.2lf convergence = %.0e max_iterations = %lu numeric = 1 delimiter = '%s'\n", 
       (*graph)->alpha, (*graph)->convergence, (*graph)->max_iterations, (*graph)->delim);
 }
+
+void graph_destroy(struct graph *graph)
+{
+  size_t i;
+
+  for (i = 0; i < graph->size; ++i)
+    numa_free(graph->pages[i].p, graph->pages[i].size * sizeof(size_t));
+  numa_free(graph->pages, graph->size * sizeof(struct links));
+  numa_free(graph->pr, graph->size * sizeof(double));
+  numa_free(graph->num_outgoing, graph->size * sizeof(size_t));
+  free(graph);
+}
+
 
 /* Compute the pagerank values for 'graph' */
 void graph_pagerank(struct graph *graph)
@@ -105,38 +118,30 @@ void graph_pagerank(struct graph *graph)
     num_iterations++;
   } 
   //printf("Ran %lu iterations. Achieved %lf error\n", num_iterations, diff);
+  free(old_pr);
   printf("Done calculating!\n");
 }
 
 /* Add a link in the graph 'g' from 'from' to 'to' */
 static void _graph_add_link(struct graph *g, size_t from, size_t to)
 {
-  size_t to_out, i;
+  size_t to_out;
   struct links *pages = g->pages;
   
   g->num_outgoing[from]++;
-  to_out = g->pages[to].num_links;
   
-  if (to == 1 || to == 2) {
-    printf("1:[ ");
-    for (i = 0; i < to_out; ++i)
-      printf("%d ", pages[1].p[i]);
-    printf("]\n");
-  }
-
   if (pages[to].size == 0) {
-    pages[to].p = numa_alloc_onnode(100, 0);
+    pages[to].p = numa_alloc_onnode(100*sizeof(size_t), 0);
     if(!pages[to].p) {
       perror("Could not allocate array");
       exit(1);
     }
     pages[to].num_links = 0;
-    to_out = 0;
     pages[to].size = 100;
   }
-
+  
   if (pages[to].num_links == pages[to].size) {
-    pages[to].p = numa_realloc(pages[to].p, pages[to].size, 2*pages[to].size);
+    pages[to].p = numa_realloc(pages[to].p, pages[to].size * sizeof(size_t), 2*pages[to].size * sizeof(size_t));
     if (!pages[to].p) {
       perror("Could not grow array");
       exit(1);
@@ -144,14 +149,9 @@ static void _graph_add_link(struct graph *g, size_t from, size_t to)
     pages[to].size *= 2;
   }
 
+  to_out = g->pages[to].num_links;
   pages[to].p[to_out] = from;
   pages[to].num_links++;
-  if (to == 1 || to == 2) {
-    printf("1:[ ");
-    for (i = 0; i < to_out; ++i)
-      printf("%d ", pages[1].p[i]);
-    printf("]\n");
-  }
 }
 
 /* parse a single line from file to get a link.
@@ -164,11 +164,15 @@ static void _graph_parse_link(struct graph *g, char *line, size_t len)
   char *ret;
   size_t from, to;
   
+  if (len < 4) {
+    fprintf(stderr, "Malformed line\n");
+    exit(1);
+  }
+
   line[len-1] = '\0';
-  printf("%u : %s\n", len, line);
   ret = strtok(line, g->delim);
   if (!ret) {
-    fprintf(stderr, "Maeormed input file\n");
+    fprintf(stderr, "Malformed input file\n");
     exit(1);
   }
 
@@ -176,7 +180,7 @@ static void _graph_parse_link(struct graph *g, char *line, size_t len)
 
   ret = strtok(NULL, g->delim);
   if (!ret) {
-    fprintf(stderr, "Maeormed input file\n");
+    fprintf(stderr, "Malformed input file\n");
     exit(1);
   }
 
@@ -199,7 +203,6 @@ void graph_read_file(const char *filename, struct graph *g)
 
   printf("Reading input from %s...\n", filename);
   while ((read = getline(&line, &len, fp)) != -1) {
-    printf("line length: %u\n", read);
     _graph_parse_link(g, line, read);
     cnt++;
   }
@@ -207,7 +210,8 @@ void graph_read_file(const char *filename, struct graph *g)
   if (line)
     free(line);
 
-  printf("read %d lines, %d vertices\n", cnt, g->size);
+  fclose(fp);
+  printf("read %lu lines, %lu vertices\n", cnt, g->size);
 }
 
 void graph_print(const char *filename, struct graph *g)
@@ -226,7 +230,7 @@ void graph_print(const char *filename, struct graph *g)
   }
 
   for (i = 0; i < g->size; ++i) {
-    fprintf(fp, "%d:[ ", i);
+    fprintf(fp, "%lu:[ ", i);
     num_in = g->pages[i].num_links;
     for (j = 0; j < num_in; ++j)
       fprintf(fp, "%lu ", g->pages[i].p[j]);

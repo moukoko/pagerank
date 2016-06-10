@@ -33,6 +33,7 @@ int main(int argc, char *argv[])
 //  graph_print(NULL, g);
   graph_pagerank(g);
   graph_print_pagerank(outf, g);
+  graph_destroy(g);
 
   return 0;
 }

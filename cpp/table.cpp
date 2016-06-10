@@ -301,6 +301,7 @@ void Table::pagerank() {
 
     size_t num_rows = rows.size();
     
+    print_table();
     if (num_rows == 0) {
         return;
     }

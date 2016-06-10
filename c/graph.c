@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <numa.h>
 #include <math.h>
 #include <stdio.h>
@@ -27,17 +28,21 @@ void graph_init(struct graph **graph, size_t size)
   (*graph)->pages = numa_alloc_onnode(size * sizeof(struct links), 0);
   memset((*graph)->pages, 0, sizeof(struct links) * size);
   (*graph)->num_outgoing = numa_alloc_onnode(size * sizeof(size_t), 0);
+  printf("alpha = %.2lf convergence = %.0e max_iterations = %d numeric = 1 delimiter = '%s'\n", 
+      (*graph)->alpha, (*graph)->convergence, (*graph)->max_iterations, (*graph)->delim);
 }
 
 /* Compute the pagerank values for 'graph' */
 void graph_pagerank(struct graph *graph)
 {
-  double diff, sum_pr, dangling_pr, *old_pr, *pr, cpr;
+  double diff = 1, sum_pr, dangling_pr, *old_pr, *pr, cpr;
   size_t i, k, j, size, out;
   unsigned long num_iterations = 0;
   double one_Av, one_Iv, h, h_v;
 
+  printf("Calculating pagerank...\n");
 
+  graph_print(NULL, graph);
   pr = graph->pr;
   size = graph->size;
   old_pr = malloc(size * sizeof(double));
@@ -46,20 +51,19 @@ void graph_pagerank(struct graph *graph)
     exit(1);
   }
   
-  printf("Running PageRank. Up to %lu iterations, until: %lf error\n", graph->max_iterations, graph->convergence);
-  do {
+  while (diff > graph->convergence && num_iterations < graph->max_iterations) {
     sum_pr = 0.0;
     dangling_pr = 0.0;
 
-    printf("PageRank iteration: %lu\n", num_iterations);
-    graph_print_pagerank(NULL, graph);
+ //   printf("PageRank iteration: %lu\n", num_iterations);
+//    graph_print_pagerank(NULL, graph);
     for (k = 0; k < size; ++k) {
       cpr = pr[k];
       sum_pr += cpr;
       if (graph->num_outgoing[k] == 0)
         dangling_pr += cpr;
     }
-    printf("sum of pr: %lf\n", sum_pr); fflush(stdout);
+ //   printf("sum of pr: %lf\n", sum_pr); fflush(stdout);
 
     if (num_iterations == 0)
       memcpy(old_pr, pr, graph->size * sizeof(double));
@@ -84,13 +88,13 @@ void graph_pagerank(struct graph *graph)
     /* The difference to be checked for convergence */
     diff = 0;
     for (i = 0; i < size; ++i) {
-      printf("Checking page: %lu\n", i);
+      //printf("Checking page: %lu\n", i);
       /* The corresponding element of the H multiplication */
       h = 0;
       for (j = 0; j < graph->pages[i].num_links; ++j) {
         out = graph->pages[i].p[j];
-        printf("Checking inbound link: %lu\n", out);
-        printf("Outgoing links of %lu: %lu\n", out, graph->num_outgoing[out]);
+        //printf("Checking inbound link: %lu\n", out);
+        //printf("Outgoing links of %lu: %lu\n", out, graph->num_outgoing[out]);
         h_v = (graph->num_outgoing[out]) ? 1.0 / graph->num_outgoing[out] : 0.0;
         h += h_v * old_pr[out];
       }
@@ -99,29 +103,39 @@ void graph_pagerank(struct graph *graph)
       diff += fabs(pr[i] - old_pr[i]);
     }
     num_iterations++;
-  } while (diff > graph->convergence && num_iterations < graph->max_iterations);
-  printf("Ran %lu iterations. Achieved %lf error\n", num_iterations, diff);
+  } 
+  //printf("Ran %lu iterations. Achieved %lf error\n", num_iterations, diff);
+  printf("Done calculating!\n");
 }
 
 /* Add a link in the graph 'g' from 'from' to 'to' */
 static void _graph_add_link(struct graph *g, size_t from, size_t to)
 {
-  size_t to_out;
+  size_t to_out, i;
   struct links *pages = g->pages;
   
   g->num_outgoing[from]++;
   to_out = g->pages[to].num_links;
   
+  if (to == 1 || to == 2) {
+    printf("1:[ ");
+    for (i = 0; i < to_out; ++i)
+      printf("%d ", pages[1].p[i]);
+    printf("]\n");
+  }
+
   if (pages[to].size == 0) {
-    pages[to].p = numa_alloc_onnode(10, 0);
+    pages[to].p = numa_alloc_onnode(100, 0);
     if(!pages[to].p) {
       perror("Could not allocate array");
       exit(1);
     }
-    pages[to].size = 10;
+    pages[to].num_links = 0;
+    to_out = 0;
+    pages[to].size = 100;
   }
 
-  if (pages[to].num_links + 1 > pages[to].size) {
+  if (pages[to].num_links == pages[to].size) {
     pages[to].p = numa_realloc(pages[to].p, pages[to].size, 2*pages[to].size);
     if (!pages[to].p) {
       perror("Could not grow array");
@@ -132,6 +146,12 @@ static void _graph_add_link(struct graph *g, size_t from, size_t to)
 
   pages[to].p[to_out] = from;
   pages[to].num_links++;
+  if (to == 1 || to == 2) {
+    printf("1:[ ");
+    for (i = 0; i < to_out; ++i)
+      printf("%d ", pages[1].p[i]);
+    printf("]\n");
+  }
 }
 
 /* parse a single line from file to get a link.
@@ -144,7 +164,8 @@ static void _graph_parse_link(struct graph *g, char *line, size_t len)
   char *ret;
   size_t from, to;
   
-  line[len-3] = '\0';
+  line[len-1] = '\0';
+  printf("%u : %s\n", len, line);
   ret = strtok(line, g->delim);
   if (!ret) {
     fprintf(stderr, "Malformed input file\n");
@@ -167,7 +188,7 @@ void graph_read_file(const char *filename, struct graph *g)
 {
   FILE *fp;
   char *line = NULL;
-  size_t len = 0;
+  size_t len = 0, cnt = 0;
   ssize_t read;
 
   fp = fopen(filename, "r");
@@ -176,9 +197,17 @@ void graph_read_file(const char *filename, struct graph *g)
     exit(1);
   }
 
+  printf("Reading input from %s...\n", filename);
   while ((read = getline(&line, &len, fp)) != -1) {
-    _graph_parse_link(g, line, len);
+    printf("line length: %u\n", read);
+    _graph_parse_link(g, line, read);
+    cnt++;
   }
+
+  if (line)
+    free(line);
+
+  printf("read %d lines, %d vertices\n", cnt, g->size);
 }
 
 void graph_print(const char *filename, struct graph *g)
@@ -196,16 +225,12 @@ void graph_print(const char *filename, struct graph *g)
     }
   }
 
-  fprintf(fp, "alpha: %lf\n", g->alpha);
-  fprintf(fp, "delimiter: \"%s\"\n", g->delim);
-  fprintf(fp, "Number of nodes: %lu\n", g->size);
   for (i = 0; i < g->size; ++i) {
-    fprintf(fp, "NODE %lu\n", i);
-    fprintf(fp, "NUM_OUTGOING %lu\n", g->num_outgoing[i]);
+    fprintf(fp, "%d:[ ", i);
     num_in = g->pages[i].num_links;
-    fprintf(fp, "INCOMING NODES: %lu\n", num_in);
     for (j = 0; j < num_in; ++j)
-      fprintf(fp, "%lu%c", g->pages[i].p[j], (j == num_in - 1) ? '\n' : ' ');
+      fprintf(fp, "%lu ", g->pages[i].p[j]);
+    fprintf(fp, "]\n");
   }
 }
 
@@ -213,6 +238,7 @@ void graph_print_pagerank(const char *filename, struct graph *g)
 {
   size_t i;
   FILE *fp;
+  double sum = 0.0;
 
   if (!filename)
     fp = stdout;
@@ -224,9 +250,10 @@ void graph_print_pagerank(const char *filename, struct graph *g)
     }
   }
 
-  fprintf(fp, "NODE_ID PAGERANK\n");
-  for (i = 0; i < g->size; ++i)
-    fprintf(fp, "%lu: %lf\n", i, g->pr[i]);
-
+  for (i = 0; i < g->size; ++i) {
+    fprintf(fp, "%lu = %lf\n", i, g->pr[i]);
+    sum += g->pr[i];
+  }
+  fprintf(fp, "s = %lf\n", sum);
   fclose(fp);
 }

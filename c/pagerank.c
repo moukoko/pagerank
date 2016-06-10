@@ -23,9 +23,7 @@ int main(int argc, char *argv[])
   size = atol(argv[2]);
 
   graph_init(&g, size);
-//  graph_print(NULL, g);
   graph_read_file(argv[1], g);
-  graph_print(NULL, g);
   graph_pagerank(g);
   graph_print_pagerank(NULL, g);
 
